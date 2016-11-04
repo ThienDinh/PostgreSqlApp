@@ -125,6 +125,7 @@ function test() {
 	});
 }
 
+// Load the requested table from data log file into the database.
 function loadTable(table_name) {
 	// Open file to read.
 	const rl = readline.createInterface({
@@ -162,11 +163,13 @@ function loadTable(table_name) {
 
 }
 
+// Junk.
 var dum = ['16600001	CLAIMS	CLM_CONV_SRC_STG	1000	M_CNG_VKX4490T_KEYS	1010		$UTILITY_SCRIPTS		udRunMacroNoP	pm_cng_psa_d m_cng_vkx4490t_keys	n	n	$APP_ERROR_MAIL_RECIP	UNIX	M_CNG_VKX4490T_KEYS	2	2010-05-27 14:33:11.110000	2013-06-12 12:24:06.940000	?	Y',
 '21400010	CLAIMS	CLM_CONV_SRC_STG	1000	M_CNG_VKX3640T_KEYS	1020	$UTILITY_SCRIPTS	udRunMacroNoP	pm_cng_psa_d m_cng_vkx3640t_keys	n	n	$APP_ERROR_MAIL_RECIP	UNIX	M_CNG_VKX3640T_KEYS	2	2012-01-30 14:33:11.110000	2013-06-12 12:24:07.130000	?	Y',
 '18700020	CLAIMS	CLM_ACS_EXTR	50	CLEANUP	10	$DRIVER_CONTROL	ud_driverCleanPrevRun		n	n	$APP_ERROR_MAIL_RECIP	UNIX	ud_driverCleanPrevRun	2	2010-06-10 07:00:00.000000	2010-06-10 07:00:00.000000	?	Y',
 '18700021	CLAIMS	CLM_ACS_EXTR	100	DRIVER_ENTRIES_INSERT	10	$UTILITY_SCRIPTS	edwPMCMD	PM_CL_EXTR_COBRA wf_UPSERT_DRIVER_STEP_RUNNING 100 10	n	n	$APP_ERROR_MAIL_RECIP	UNIX	ud_driverCleanPrevRun	2	2010-06-10 07:00:00.000000	2010-06-10 07:00:00.000000	?	Y'];
 
+// Junk.
 dum.forEach((v) => {
 	var splited_v = v.split('\t');
 	if(splited_v.length !== 19) {
@@ -178,6 +181,7 @@ dum.forEach((v) => {
 	console.log(splited_v.length);
 })
 
+// Remove empty string parameters.
 function balance_parameters(line) {
 	var splited_line = line.split('\t');
 	if(splited_line.length !== 19) {
@@ -188,7 +192,7 @@ function balance_parameters(line) {
 	return splited_line;
 }
 
-
+// Parse each row from the data log text into an array.
 function toArray(line) {
 	var e_line = balance_parameters(line);
 	for(var i = 0; i < e_line.length; i++) {
@@ -205,10 +209,12 @@ function toArray(line) {
 	return e_line;
 }
 
+// Formuate the INSERT query to insert data into our database.
 function formulateInsertMacro(table, arr_values) {
 	return ('insert into ' + table + ' values (' + arr_values + ');');
 }
 
+// Load all tables.
 function loadTables() {
 	// Fail because 'Driver Step ID' column is not in table schema from the log file.
 	loadTable('c_driver_step');
