@@ -132,37 +132,44 @@ function loadTable(table_name) {
 	var fd = fs.openSync('./datalogfiles/' + table_name + '_modified.txt', 'w');
 	var counter = 0;
 	rl.on('line', (line) => {
-				// process.exit(0);
 				counter = counter + 1;
+				// If it is the first line in the data log, we skip it.
 				if (counter === 1) return;
-				var x = line;
-				// x = formulateInsertMacro(table_name, toArray(x));
-				// console.log(`${x}`);
-				// client.query(x, function(err, result) {
-				// 	if(err) {
-				// 		console.log('erro bro: ' +err);
-				// 		console.log(x);
-				// 		process.exit(0);
-				// 	}
-				// 	else {
-				// 		console.log('result bro: ' + result);			
-				// 	}
-				// });
+
 				line = line.replace(/\t\t\$/g, '\t$');
-				line = line.replace(/\t/g,'@');
-				var pattern = /\@\$\w+\@\@/;
-				if(pattern.test(line)) {
+				line = line.replace(/\t\t\//g, '\t/');				
+				line = line.replace(/\t/g,'"');
+				// Split the array using the character Tab '\t' as the delimiter.
+				var arr = line.split('"');
+				var edited_line = joinArray(arr, '"');
+				// console.log(edited_line);
+				// Balance the number of separators.
+				/*
+					Noted that there are 3 values that can be converted into integer.
+					From the two 'y/n', we can go backward and forward.
+					Also, after the path, must be the command, which is only one command, and the rest is parameters.
+				*/
+				// arr = balance_parameters(arr);
+
+				var pattern1 = /\"\$\w+\"\"/;
+				var pattern2 = /\"\/\w+\"\"/;
+				if(pattern1.test(line)) {
 					// console.log(line);
-					var extract = pattern.exec(line);
-					line = line.replace(pattern, '@$' + /\w+/i.exec(extract) +'@');
+					var extract = pattern1.exec(line);
+					line = line.replace(pattern1, '"$' + /\w+/i.exec(extract) +'"');
 					// console.log('Edited');
 					// console.log(new_line);
+				} else if (pattern2.test(line)) {
+					var extract = pattern2.exec(line);
+					line = line.replace(pattern2, '"/' + /\w+/i.exec(extract) +'"');					
 				}
-				line = line.replace(/\@/g, '\t');
+				line = line.replace(/\"/g, '\t');
+
 				fs.write(fd, line+'\n');
 	});
 //1519120014
 //1524720016
+// 16600001
 	rl.on('close', () => {
 		console.log('End reading lines from text file.');
 		fs.closeSync(fd);
@@ -177,29 +184,31 @@ function loadTable(table_name) {
 
 }
 
+function joinArray(arr, delimiter) {
+	var join = arr[0];
+	for(var i = 1; i < arr.length; i++) {
+		join = join.concat(delimiter + arr[i]);
+	}
+	return join;
+}
+
 // Remove empty string parameters.
-function balance_parameters(line) {
-	var splited_line = line.split('\t');
-	if(splited_line.length !== 19) {
-		splited_line = splited_line.filter((el) => {
-			return el !=='';
-		});
+function balance_parameters(arr) {
+	var total = arr.length;
+	// var begin = 0;
+	// var mid;
+	// var end = ;
+
+	for(var i = 0; i < arr.length; i++) {
+
 	}
 	return splited_line;
 }
 
-// Parse each row from the data log text into an array.
-function toArray(line) {
-	var e_line = balance_parameters(line);
-	for(var i = 0; i < e_line.length; i++) {
-		if(e_line[i] === '?') {
-			e_line[i] = 'DEFAULT';
-		}
-		else {
-			e_line[i] = "'" + e_line[i] + "'";
-		}
-	}
-	return e_line;
+// Convert a string into an array using the provided delimiter.
+function toArray(line, delimiter) {
+	var arr = line.split(delimiter);
+	return arr;
 }
 
 // Formuate the INSERT query to insert data into our database.
