@@ -120,6 +120,7 @@ function createTables() {
 	});
 }
 
+var number_of_unsual_rows;
 // Load the requested table from data log file into the database.
 function loadTable(table_name) {
 	// Open file to read.
@@ -131,19 +132,15 @@ function loadTable(table_name) {
 	});
 	var fd = fs.openSync('./datalogfiles/' + table_name + '_modified.txt', 'w');
 	var counter = 0;
+	number_of_unsual_rows = 0;
 	rl.on('line', (line) => {
 				counter = counter + 1;
 				// If it is the first line in the data log, we skip it.
 				if (counter === 1) return;
-
-				line = line.replace(/\t\t\$/g, '\t$');
-				line = line.replace(/\t\t\//g, '\t/');				
-				line = line.replace(/\t/g,'"');
 				// Split the array using the character Tab '\t' as the delimiter.
-				var arr = line.split('"');
-				var edited_line = joinArray(arr, '"');
-				// console.log(edited_line);
-				// Balance the number of separators.
+				var arr = line.split('\t');
+				// console.log(arr);
+				var edited_line = joinArray(arr, '~');
 				/*
 					Noted that there are 3 values that can be converted into integer.
 					From the two 'y/n', we can go backward and forward.
@@ -151,21 +148,8 @@ function loadTable(table_name) {
 				*/
 				// arr = balance_parameters(arr);
 
-				var pattern1 = /\"\$\w+\"\"/;
-				var pattern2 = /\"\/\w+\"\"/;
-				if(pattern1.test(line)) {
-					// console.log(line);
-					var extract = pattern1.exec(line);
-					line = line.replace(pattern1, '"$' + /\w+/i.exec(extract) +'"');
-					// console.log('Edited');
-					// console.log(new_line);
-				} else if (pattern2.test(line)) {
-					var extract = pattern2.exec(line);
-					line = line.replace(pattern2, '"/' + /\w+/i.exec(extract) +'"');					
-				}
-				line = line.replace(/\"/g, '\t');
+				fs.write(fd, edited_line+'\n');
 
-				fs.write(fd, line+'\n');
 	});
 //1519120014
 //1524720016
@@ -173,23 +157,42 @@ function loadTable(table_name) {
 	rl.on('close', () => {
 		console.log('End reading lines from text file.');
 		fs.closeSync(fd);
-		console.log('Calling PostgreSQL COPY function.');
-		// client.query("", function(err, result) {
-			// console.log(result);
-		// });
-		// Close database connection.
-		// client.end();
+		console.log("The number of unusual rows is " + number_of_unsual_rows);
 		console.log('Program finished!');
 	});
 
 }
 
+// Join elements of an array into one line using the provided delimeter.
 function joinArray(arr, delimiter) {
-	var join = arr[0];
+	var t_arr = toNumberTypeArray(arr);
+	var join = t_arr[0];
 	for(var i = 1; i < arr.length; i++) {
-		join = join.concat(delimiter + arr[i]);
+		join = join + delimiter + t_arr[i];
 	}
-	return join;
+	// console.log(join);
+	return t_arr;
+}
+
+// Convert elements of the array to numbers.
+function toNumberTypeArray(arr) {
+	var t_arr = [];
+	var counter = 0;
+	var unusual = false;
+	for(var i = 0; i < arr.length; i++) {
+		var n = NaN;
+		if(Number(arr[i]) === Number.parseInt(arr[i])) {
+			counter = counter + 1;
+			n = Number(arr[i]);
+		}
+		t_arr.push(n);
+	}
+	// Print lines that have unusual structure, which does not have exact 4 columns of integer types.
+	if (counter !== 4) {
+		console.log(t_arr.toString());
+		number_of_unsual_rows = number_of_unsual_rows + 1;
+	}
+	return t_arr;
 }
 
 // Remove empty string parameters.
