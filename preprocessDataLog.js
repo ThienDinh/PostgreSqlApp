@@ -71,8 +71,8 @@ function createTables() {
 		'drvr_step_dtl_id decimal(18,0),'+
 		'audt_id decimal(18,0),'+
 		'drvr_step_id decimal(18,0),'+
-		'app_name varchar(25) not null,'+
-		'run_name varchar(25) not null,'+
+		'app_nme varchar(25) not null,'+
+		'run_nme varchar(25) not null,'+
 		'grp_nbr smallint not null,'+
 		'run_order_nbr smallint not null,'+
 		'run_stts_cd varchar(2) null,'+
@@ -103,8 +103,8 @@ function createTables() {
 		'drvr_step_dtl_id decimal(18,0),'+
 		'audt_id decimal(18,0),'+
 		'drvr_step_id decimal(18,0),'+
-		'app_name varchar(25) not null,'+
-		'run_name varchar(25) not null,'+
+		'app_nme varchar(25) not null,'+
+		'run_nme varchar(25) not null,'+
 		'grp_nbr integer not null,'+
 		'run_order_nbr smallint not null,'+
 		'run_stts_cd varchar(2) null,'+
@@ -130,48 +130,58 @@ function loadTable(table_name) {
 		terminal: false
 		// input: fs.createReadStream('./datalogfiles/fake.txt')
 	});
-	var fd = fs.openSync('./datalogfiles/' + table_name + '_modified.txt', 'w');
+	var fd = fs.openSync('./datalogfiles/' + table_name + '_preprocessed.txt', 'w');
 	var counter = 0;
 	number_of_unsual_rows = 0;
 	rl.on('line', (line) => {
 				counter = counter + 1;
 				// If it is the first line in the data log, we skip it.
 				if (counter === 1) return;
-				// Split the array using the character Tab '\t' as the delimiter.
-				var arr = line.split('\t');
-				// console.log(arr);
-				var edited_line = joinArray(arr, '~');
-				/*
-					Noted that there are 3 values that can be converted into integer.
-					From the two 'y/n', we can go backward and forward.
-					Also, after the path, must be the command, which is only one command, and the rest is parameters.
-				*/
-				// arr = balance_parameters(arr);
 
-				fs.write(fd, edited_line+'\n');
+				// Preprocess data in C_DRIVER_STEP.
+				if(table_name === 'c_driver_step') {
+					// Split the array using the character Tab '\t' as the delimiter.
+					var arr = line.split('\t');
+					// console.log(arr);
+					var result = joinArray(arr, '~');
+					var edited_line = result.result;
+					if(result.isUnusual) {
+						return;					
+					}
+					/*
+						Noted that there are 3 values that can be converted into integer.
+						From the two 'y/n', we can go backward and forward.
+						Also, after the path, must be the command, which is only one command, and the rest is parameters.
+					*/
+				}
+				fs.write(fd, line+'\n');
 
 	});
 //1519120014
 //1524720016
 // 16600001
 	rl.on('close', () => {
-		console.log('End reading lines from text file.');
+		console.log('Prepocessing ' + table_name +' completed.');
 		fs.closeSync(fd);
-		console.log("The number of unusual rows is " + number_of_unsual_rows);
-		console.log('Program finished!');
 	});
 
 }
 
 // Join elements of an array into one line using the provided delimeter.
 function joinArray(arr, delimiter) {
-	var t_arr = toNumberTypeArray(arr);
+	var result = toNumberTypeArray(arr);
+	var t_arr = result.result;
 	var join = t_arr[0];
 	for(var i = 1; i < arr.length; i++) {
 		join = join + delimiter + t_arr[i];
 	}
+	// There are 19 columns in the table C_DRIVER_STEP.
+	if(arr.length !== 19) {
+		result.isUnusual = true;
+	}
 	// console.log(join);
-	return t_arr;
+	result.result = join;
+	return result;
 }
 
 // Convert elements of the array to numbers.
@@ -190,51 +200,32 @@ function toNumberTypeArray(arr) {
 	// Print lines that have unusual structure, which does not have exact 4 columns of integer types.
 	if (counter !== 4) {
 		console.log(t_arr.toString());
-		number_of_unsual_rows = number_of_unsual_rows + 1;
+		unusual= true;
+		// number_of_unsual_rows = number_of_unsual_rows + 1;
 	}
-	return t_arr;
-}
-
-// Remove empty string parameters.
-function balance_parameters(arr) {
-	var total = arr.length;
-	// var begin = 0;
-	// var mid;
-	// var end = ;
-
-	for(var i = 0; i < arr.length; i++) {
-
-	}
-	return splited_line;
-}
-
-// Convert a string into an array using the provided delimiter.
-function toArray(line, delimiter) {
-	var arr = line.split(delimiter);
-	return arr;
-}
-
-// Formuate the INSERT query to insert data into our database.
-function formulateInsertMacro(table, arr_values) {
-	return ('insert into ' + table + ' values (' + arr_values + ');');
+	return {
+		result: t_arr,
+		isUnusual: unusual
+	};
 }
 
 // Load all tables.
 function loadTables() {
-	// Fail because 'Driver Step ID' column is not in table schema from the log file.
+
+	// Still have trouble with it.
 	loadTable('c_driver_step');
 
-	// Fail because of the header.
-	// loadTable('c_driver_step_detail');
+	// Loaded successfully.
+	loadTable('c_driver_step_detail');
 
-	// Fail because of the header.
-	// loadTable('c_driver_step_detail_h');
+	// Loaded successfully.
+	loadTable('c_driver_step_detail_h');
 
-	// Successful without the header.
-	// loadTable('c_app_run_dependency');
+	// Loaded successfully.
+	loadTable('c_app_run_dependency');
 
-	// Fail because the database schema lacks of the last two columns in the datalog.
-	// loadTable('c_driver_schedule');
+	// Loaded successfully.
+	loadTable('c_driver_schedule');
 }
 
 // Execute functions.
@@ -242,8 +233,8 @@ dropTables();
 createTables();
 loadTables();
 
-// copy c_app_run_dependency from 'C:\Users\tdinh\Documents\Code\NodeJS\PostgreSqlApp\DataLogFiles\c_app_run_dependency_modified.txt' (NULL '?');
-// copy c_driver_step from 'C:\Users\tdinh\Documents\Code\NodeJS\PostgreSqlApp\DataLogFiles\c_driver_step_modified.txt' (NULL '?');
-// copy c_driver_step_detail from 'C:\Users\tdinh\Documents\Code\NodeJS\PostgreSqlApp\DataLogFiles\c_driver_step_detail_modified.txt' (NULL '?');
-// copy c_driver_step_detail_h from 'C:\Users\tdinh\Documents\Code\NodeJS\PostgreSqlApp\DataLogFiles\c_driver_step_detail_h_modified.txt' (NULL '?');
-// copy c_driver_schedule from 'C:\Users\tdinh\Documents\Code\NodeJS\PostgreSqlApp\DataLogFiles\c_driver_schedule_modified.txt' (NULL '?');
+// copy c_app_run_dependency from 'C:\Users\tdinh\Documents\Code\NodeJS\PostgreSqlApp\DataLogFiles\c_app_run_dependency_preprocessed.txt' (NULL '?');
+// copy c_driver_step from 'C:\Users\tdinh\Documents\Code\NodeJS\PostgreSqlApp\DataLogFiles\c_driver_step_preprocessed.txt' (NULL '?');
+// copy c_driver_step_detail from 'C:\Users\tdinh\Documents\Code\NodeJS\PostgreSqlApp\DataLogFiles\c_driver_step_detail_preprocessed.txt' (NULL '?');
+// copy c_driver_step_detail_h from 'C:\Users\tdinh\Documents\Code\NodeJS\PostgreSqlApp\DataLogFiles\c_driver_step_detail_h_preprocessed.txt' (NULL '?');
+// copy c_driver_schedule from 'C:\Users\tdinh\Documents\Code\NodeJS\PostgreSqlApp\DataLogFiles\c_driver_schedule_preprocessed.txt' (NULL '?');
