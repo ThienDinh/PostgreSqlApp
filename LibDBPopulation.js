@@ -2,7 +2,12 @@ var pg = require('pg');
 var fs = require('fs');
 const readline = require('readline');
 
-var config = {
+/*
+	PostgreSQL is required to install prior to running this program.
+	Change the setting in the PostgreSQL_config object if needed.
+*/
+
+var PostgreSQL_config = {
 	user: 'postgres',
 	password: 'abc12345',
 	database: 'postgres',
@@ -10,14 +15,23 @@ var config = {
 	port: 5432
 };
 
-var client = new pg.Client(config);
+var client = new pg.Client(PostgreSQL_config);
 
-client.on('drain', client.end.bind(client)); //disconnect client when all queries are finished
+// disconnect client when all queries are finished.
+client.on('drain', client.end.bind(client)); 
+// open connection to database.
 client.connect();
+
 //Drop all tables.
 function dropTables() {
-	client.query('drop table c_driver_schedule; drop table c_driver_step; drop table c_driver_step_detail; drop table c_app_run_dependency; drop table c_driver_step_detail_h;', function(err, result) {
+	client.query('drop table c_driver_schedule cascade; drop table c_driver_step cascade; drop table c_driver_step_detail cascade; drop table c_app_run_dependency cascade; drop table c_driver_step_detail_h cascade;', function(err, result) {
 		// console.log('Result of dropTables(): ' + result);
+		if(err) {
+			console.log("Error dropping tables");
+		}
+		else {
+			console.log("All tables dropped!");			
+		}
 	});
 }
 
@@ -40,8 +54,13 @@ function createTables() {
 		"lst_mdfd_dtm time,"+
 		"app_run_id decimal(18,0),"+
 		"sla_date date,"+
-		"sla_time time);", function(erro, result) {
-		// console.log(result);
+		"sla_time time);", function(error, result) {
+		if(error) {
+			console.log('C_DRIVER_SCHEDULE creation failed!');
+		}
+		else {
+			console.log('C_DRIVER_SCHEDULE creation succeded!');
+		}
 	});
 	// Table C_DRIVER_STEP.
 	client.query('create table c_driver_step ('+
@@ -64,7 +83,12 @@ function createTables() {
 		'lst_mdfd_dtm timestamp,'+
 		'app_run_id decimal(18,0),'+
 		'actv_step_ind varchar(2));', function(err, result) {
-		// console.log(result);
+		if(error) {
+			console.log('C_DRIVER_STEP creation failed!');
+		}
+		else {
+			console.log('C_DRIVER_STEP creation succeded!');
+		}
 	});
 	// Table C_DRIVER_STEP_DETAIL.
 	client.query('create table c_driver_step_detail ('+
@@ -83,7 +107,12 @@ function createTables() {
 		'run_end_dtm timestamp,'+
 		'crt_dtm timestamp,'+
 		'lst_mdfd_dtm timestamp);', function (err, result) {
-		// console.log(result);
+		if(error) {
+			console.log('C_DRIVER_STEP_DETAIL creation failed!');
+		}
+		else {
+			console.log('C_DRIVER_STEP_DETAIL creation succeded!');
+		}
 	});
 	// Table C_APP_RUN_DEPENDENCY.
 	client.query('create table c_app_run_dependency ('+
@@ -96,7 +125,12 @@ function createTables() {
 		'lst_mdfd_dtm timestamp,'+
 		'app_run_id decimal(18,0),'+
 		'dependant_app_run_id decimal(18,0));', function(err, result){
-		// console.log(result);
+		if(error) {
+			console.log('C_APP_RUN_DEPENDENCY creation failed!');
+		}
+		else {
+			console.log('C_APP_RUN_DEPENDENCY creation succeded!');
+		}
 	});
 	// Table C_DRIVER_STEP_DETAIL_H.
 	client.query('create table c_driver_step_detail_h ('+
@@ -116,11 +150,15 @@ function createTables() {
 		'crt_dtm time,'+
 		'lst_mdfd_dtm time,'+
 		'hist_dtm time);', function(err, result) {
-		// console.log(result);
+		if(error) {
+			console.log('C_DRIVER_STEP_DETAIL_H creation failed!');
+		}
+		else {
+			console.log('C_DRIVER_STEP_DETAIL_H creation succeded!');
+		}
 	});
 }
 
-var number_of_unsual_rows;
 // Load the requested table from data log file into the database.
 function loadTable(table_name) {
 	// Open file to read.
@@ -128,63 +166,93 @@ function loadTable(table_name) {
 		input: fs.createReadStream('./datalogfiles/' + table_name + '.txt'),
 		output: process.stdout,
 		terminal: false
-		// input: fs.createReadStream('./datalogfiles/fake.txt')
 	});
-	var fd = fs.openSync('./datalogfiles/' + table_name + '_preprocessed.txt', 'w');
 	var counter = 0;
-	number_of_unsual_rows = 0;
 	rl.on('line', (line) => {
 				counter = counter + 1;
 				// If it is the first line in the data log, we skip it.
 				if (counter === 1) return;
 
-				// Preprocess data in C_DRIVER_STEP.
+				// Split the array using the character Tab '\t' as the delimiter.
+				var arr = line.split('\t');
+
+				// Preprocess data in C_DRIVER_STEP. The data log for this table has error.
 				if(table_name === 'c_driver_step') {
-					// Split the array using the character Tab '\t' as the delimiter.
-					var arr = line.split('\t');
-					// console.log(arr);
-					var result = joinArray(arr, '~');
-					var edited_line = result.result;
-					if(result.isUnusual) {
-						return;					
+					// There are 19 columns in the table C_DRIVER_STEP.
+					if(arr.length !== 19) {
+						// Skip the row if it does not have exact 19 columns.
+						return;
 					}
+					// var result = joinArray(arr, ',');
+					// var line = result.result;
+					// if(result.isUnusual) {
+					// 	return;					
+					// }
 					/*
 						Noted that there are 3 values that can be converted into integer.
 						From the two 'y/n', we can go backward and forward.
 						Also, after the path, must be the command, which is only one command, and the rest is parameters.
 					*/
 				}
-				fs.write(fd, line+'\n');
+				var query = formulateInsertQuery(table_name, arr);
+				// Execute query.
+				client.query(query, function(error, result) {
+					if(error) {
+						console.log('Fail: ' + query);
+					}
+					else {
+						// console.log('Success: ' + query);
+					}
+				});
 
 	});
+	rl.on('close', () => {
+		console.log('Prepocessing ' + table_name +' completed.');		
+	});
+
+}
+
 //1519120014
 //1524720016
 // 16600001
-	rl.on('close', () => {
-		console.log('Prepocessing ' + table_name +' completed.');
-		fs.closeSync(fd);
-	});
 
+// Form INSERT query to insert rows into database.
+function formulateInsertQuery(table, arr) {	
+	for(var i = 0; i < arr.length; i++) {
+		if(arr[i] === '?') {
+			arr[i] = '\\N'; // \N means Null
+		}
+	}
+	var parameters = joinArray(arr, ',');
+	// console.log(parameters);
+	var query = 'insert into ' + table + ' values(' + parameters + ');';
+	return query;
 }
 
 // Join elements of an array into one line using the provided delimeter.
 function joinArray(arr, delimiter) {
-	var result = toNumberTypeArray(arr);
-	var t_arr = result.result;
-	var join = t_arr[0];
-	for(var i = 1; i < arr.length; i++) {
-		join = join + delimiter + t_arr[i];
-	}
-	// There are 19 columns in the table C_DRIVER_STEP.
-	if(arr.length !== 19) {
-		result.isUnusual = true;
+	// var result = toNumberTypeArray(arr);
+	var t_arr = arr;
+	var join = "'" + t_arr[0] + "'";
+	for(var i = 1; i < t_arr.length; i++) {
+		if(t_arr[i] === '\\N') {
+			join = join + delimiter + 'NULL';
+		}
+		else {
+			if(t_arr[i].indexOf("'") !== -1) {
+				join = join + delimiter + "$$" + t_arr[i] + "$$";
+			}
+			else {
+				join = join + delimiter + "'" + t_arr[i]+ "'";				
+			}
+		}
 	}
 	// console.log(join);
-	result.result = join;
-	return result;
+	// result.result = join;
+	return join;
 }
 
-// Convert elements of the array to numbers.
+// Convert elements of the array of types of those elements.
 function toNumberTypeArray(arr) {
 	var t_arr = [];
 	var counter = 0;
@@ -201,7 +269,6 @@ function toNumberTypeArray(arr) {
 	if (counter !== 4) {
 		console.log(t_arr.toString());
 		unusual= true;
-		// number_of_unsual_rows = number_of_unsual_rows + 1;
 	}
 	return {
 		result: t_arr,
@@ -212,7 +279,7 @@ function toNumberTypeArray(arr) {
 // Load all tables.
 function loadTables() {
 
-	// Still have trouble with it.
+	// Still have trouble with it due to data log file error.
 	loadTable('c_driver_step');
 
 	// Loaded successfully.
@@ -228,13 +295,15 @@ function loadTables() {
 	loadTable('c_driver_schedule');
 }
 
-// Execute functions.
-dropTables();
-createTables();
-loadTables();
 
-// copy c_app_run_dependency from 'C:\Users\tdinh\Documents\Code\NodeJS\PostgreSqlApp\DataLogFiles\c_app_run_dependency_preprocessed.txt' (NULL '?');
-// copy c_driver_step from 'C:\Users\tdinh\Documents\Code\NodeJS\PostgreSqlApp\DataLogFiles\c_driver_step_preprocessed.txt' (NULL '?');
-// copy c_driver_step_detail from 'C:\Users\tdinh\Documents\Code\NodeJS\PostgreSqlApp\DataLogFiles\c_driver_step_detail_preprocessed.txt' (NULL '?');
-// copy c_driver_step_detail_h from 'C:\Users\tdinh\Documents\Code\NodeJS\PostgreSqlApp\DataLogFiles\c_driver_step_detail_h_preprocessed.txt' (NULL '?');
-// copy c_driver_schedule from 'C:\Users\tdinh\Documents\Code\NodeJS\PostgreSqlApp\DataLogFiles\c_driver_schedule_preprocessed.txt' (NULL '?');
+
+/*
+	Execute functions. Uncomment the function call to run them.
+	dropTables() drops all the tables in the database.
+	createTables() creates all the tables, which are empty, in the database.
+	loadTables() loads data log into the empty tables in the database.
+	testQuery1() tests a sample query, whose result is in JSON format.
+*/
+// dropTables();
+// createTables();
+// loadTables();
